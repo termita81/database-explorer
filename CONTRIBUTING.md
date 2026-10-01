@@ -1,55 +1,57 @@
+# Contributing
 
-## Prerequisites
+## Setup
 
-- Node.js, current LTS release.
-- pnpm, installed through Corepack. Run `corepack enable` once; the correct pnpm version is pinned in the repository.
-- For the integration tests that use real databases, a container runtime (see below). This is not needed to work on SQLite support.
+Use Node.js 22.12 or newer and pnpm 10.34.6 (pinned in `package.json`).
+With Corepack available, run `corepack enable` once, then:
 
-## Getting started
-
-```
-git clone <repository>
-cd db-explorer
+```sh
 pnpm install
+pnpm dev ./tests/fixtures/sample.db
 ```
 
-## Running the application in development
+`pnpm dev` builds the packages and starts the CLI. It does not yet provide live
+reloading. Use `pnpm dev --no-browser` when running without a desktop.
+The SQLite driver uses a native component; platforms without a matching binary
+need Python and a C/C++ build toolchain for installation.
 
+## Packages
+
+- `packages/core`: canonical model, adapter interface, and capabilities.
+- `packages/adapter-sqlite`: validated file configuration and read-only SQLite lifecycle.
+- `packages/server`: connection manager, Fastify startup screen, and CLI.
+
+The web interface, shared adapter conformance kit, and other database adapters
+will be added in later phases. SQLite's introspection, statistics, and profiling
+methods currently reject with `UnsupportedOperationError`; capability flags
+indicate those features are unavailable. `objectTypes` describes engine object
+kinds, while `introspection` indicates whether browsing is implemented.
+
+## Checks
+
+```sh
+pnpm build
+pnpm test
+pnpm typecheck
+pnpm format:check
 ```
-pnpm dev
+
+Tests cover connection lifecycle, invalid configurations, write rejection by the
+real SQLite driver, target parsing, HTTP startup, and the built CLI's startup and
+shutdown. They need no container runtime. The CLI tests use `--no-browser` so they
+do not launch desktop applications.
+
+`tests/fixtures/sample.db` is a small committed SQLite database.
+`tests/fixtures/sample.sql` is its source schema and seed data. To regenerate it,
+run the following with SQLite installed, using a temporary file if the working
+directory's filesystem does not support SQLite locking:
+
+```sh
+sqlite3 /tmp/db-explorer-sample.db < tests/fixtures/sample.sql
+cp /tmp/db-explorer-sample.db tests/fixtures/sample.db
+rm /tmp/db-explorer-sample.db
 ```
 
-This starts the server and the interface with live reloading. To open a database immediately, pass a file path or a connection string:
-
-```
-pnpm dev -- ./path/to/database.db
-```
-
-## Running tests
-
-```
-pnpm test             # unit and integration tests
-pnpm test:e2e          # end-to-end tests
-pnpm test:adapters     # adapter conformance tests, including those that need a container runtime
-```
-
-SQLite tests use a fixture file in the repository and need no container runtime.
-
-## Container runtime for integration tests
-
-The adapter conformance tests for PostgreSQL, MySQL and MariaDB, and SQL Server start a throwaway database in a container. Any Docker-compatible runtime works:
-
-- On Linux, install Docker Engine or Podman from your package manager.
-- On macOS, Podman Desktop, Colima, and Rancher Desktop are free options. Docker Desktop and OrbStack are alternatives with their own licensing terms.
-- On Windows, Podman Desktop or Rancher Desktop work, as does Docker Engine inside WSL2.
-
-Continuous integration already has a runtime available, so this setup is only needed to run these tests locally. If you use Podman, the test runner may need a couple of environment variables to locate its socket; see its documentation.
-
-## Project layout
-
-See the package layout in `tech-stack.md`. In short: a database-agnostic core, one package per database adapter, a shared conformance test kit, the server, and the Vue interface.
-
-## Code style
-
-- TypeScript throughout.
-- ESLint and Prettier are enforced in continuous integration. Run `pnpm lint` before opening a pull request.
+Run `pnpm format` to format changes. The design specifications in `specs/` are
+excluded from automatic formatting. See those documents for the architecture,
+adapter contract, and roadmap.

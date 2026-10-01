@@ -1,0 +1,23 @@
+{
+  "name": "@db-explorer/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "types": "./dist/index.d.ts",
+    "default": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@db-explorer/core": "workspace:*",
+    "@db-explorer/adapter-sqlite": "workspace:*",
+    "fastify": "^5.6.1",
+    "open": "^10.2.0"
+  },
+  "bin": {
+    "db-explorer": "dist/cli.js"
+  }
+}
