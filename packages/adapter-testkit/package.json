@@ -1,5 +1,5 @@
 {
-  "name": "@db-explorer/adapter-sqlite",
+  "name": "@db-explorer/adapter-testkit",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -12,12 +12,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
-    "@db-explorer/core": "workspace:*",
-    "better-sqlite3": "^13.0.3",
-    "zod": "^4.1.12"
+    "@db-explorer/core": "workspace:*"
   },
-  "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
-    "@db-explorer/adapter-testkit": "workspace:*"
+  "peerDependencies": {
+    "vitest": "^3.2.4"
   }
 }

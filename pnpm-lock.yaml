@@ -33,9 +33,21 @@ importers:
         specifier: ^4.1.12
         version: 4.6.5
     devDependencies:
+      '@db-explorer/adapter-testkit':
+        specifier: workspace:*
+        version: link:../adapter-testkit
       '@types/better-sqlite3':
         specifier: ^7.6.13
         version: 7.6.13
+
+  packages/adapter-testkit:
+    dependencies:
+      '@db-explorer/core':
+        specifier: workspace:*
+        version: link:../core
+      vitest:
+        specifier: ^3.2.4
+        version: 3.2.7(@types/node@22.20.4)
 
   packages/core: {}
 

@@ -7,11 +7,12 @@ import {
   type DatabaseConnection,
 } from '@db-explorer/core';
 import { openReadOnlyDatabase } from './database.js';
+import { getTable, listTables } from './introspection.js';
 
 export const sqliteCapabilities: Capabilities = Object.freeze({
   schemas: false,
   objectTypes: Object.freeze(['table', 'view', 'index', 'trigger'] as const),
-  introspection: false,
+  introspection: true,
   estimatedRowCount: false,
   cheapExactRowCount: false,
   columnHistograms: false,
@@ -54,8 +55,14 @@ export const sqliteAdapter: DatabaseAdapter = {
         assertOpen();
         return [{ name: 'main' }];
       },
-      listTables: () => unavailable('Schema introspection'),
-      getTable: () => unavailable('Table introspection'),
+      async listTables(schema) {
+        assertOpen();
+        return listTables(database, schema);
+      },
+      async getTable(ref) {
+        assertOpen();
+        return getTable(database, ref);
+      },
       listRelationships: () => unavailable('Relationships'),
       getTableMetadataStats: () => unavailable('Metadata statistics'),
       profileTable: () => unavailable('Active profiling'),

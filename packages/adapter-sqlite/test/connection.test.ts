@@ -84,7 +84,9 @@ describe('SQLite connection', () => {
   it('reports future operations as unsupported', async () => {
     const connection = await sqliteAdapter.connect({ path: fixture });
     connections.push(connection);
-    expect(connection.capabilities.introspection).toBe(false);
-    await expect(connection.listTables()).rejects.toThrow('not implemented');
+    expect(connection.capabilities.introspection).toBe(true);
+    await expect(connection.listRelationships()).rejects.toThrow(
+      'not implemented',
+    );
   });
 });

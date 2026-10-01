@@ -26,7 +26,8 @@ export interface ForeignKey {
   name?: string;
   columns: string[];
   referencedTable: TableRef;
-  referencedColumns: string[];
+  // Null means an implicit target could not be resolved from the available schema.
+  referencedColumns: (string | null)[];
 }
 export interface UniqueConstraint {
   name?: string;
@@ -36,10 +37,19 @@ export interface CheckConstraint {
   name?: string;
   expression: string;
 }
+export interface IndexTerm {
+  column: string | null;
+  expression?: string;
+  descending: boolean;
+  collation: string | null;
+}
 export interface Index {
   name: string;
   columns: string[];
   unique: boolean;
+  // Ordered terms preserve expressions that do not appear in columns.
+  terms?: IndexTerm[];
+  predicate?: string;
 }
 export interface TableDetail extends TableSummary {
   columns: Column[];

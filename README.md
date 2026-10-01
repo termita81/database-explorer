@@ -1,8 +1,9 @@
 # DB Explorer
 
-A local, read-only database explorer. Phase 1 implements the core adapter contract,
-SQLite connection lifecycle, and command-line startup. Schema introspection and
-browsing are planned for later phases; the browser currently shows a startup screen.
+A local, read-only database explorer. Phases 1 and 2 implement the core adapter
+contract, SQLite connections, command-line startup, and schema introspection.
+The browser currently shows a startup screen; the JSON API and browsing interface
+are planned for subsequent phases.
 
 ## Run
 
@@ -31,10 +32,34 @@ are opened read-only and never created automatically. PostgreSQL, MySQL/MariaDB,
 SQL Server, and Oracle connection strings are recognized, but their adapters are
 not available yet; startup reports an error without printing credentials.
 
+## SQLite introspection
+
+The SQLite adapter lists tables and returns their columns, defaults, primary and
+foreign keys, UNIQUE and CHECK constraints, and indexes. Composite keys retain
+their column order; named constraints, generated columns, expression indexes,
+and partial-index conditions are preserved. Views and SQLite's internal tables
+are excluded from the table list.
+
+After building, you can inspect a table directly through the adapter:
+
+```sh
+node --input-type=module <<'JS'
+import { sqliteAdapter } from './packages/adapter-sqlite/dist/index.js';
+const connection = await sqliteAdapter.connect({ path: './tests/fixtures/sample.db' });
+try {
+  console.log(await connection.listTables());
+  console.dir(await connection.getTable({ schema: 'main', name: 'memberships' }), { depth: null });
+} finally {
+  await connection.close();
+}
+JS
+```
+
 ## Develop
 
 ```sh
 pnpm test
+pnpm test:adapters
 pnpm typecheck
 pnpm format:check
 ```
