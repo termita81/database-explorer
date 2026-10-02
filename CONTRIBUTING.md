@@ -20,9 +20,11 @@ need Python and a C/C++ build toolchain for installation.
 - `packages/core`: canonical model, adapter interface, capabilities, and relationship graph builder.
 - `packages/adapter-sqlite`: read-only SQLite connections and schema introspection.
 - `packages/adapter-testkit`: shared adapter lifecycle and introspection conformance suite.
-- `packages/server`: connection manager, validated JSON API, Fastify startup screen, and CLI.
+- `packages/server`: connection manager, validated JSON API, Fastify static hosting, and CLI.
+- `packages/web`: Vue interface, routing, query cache, and virtualized navigation.
 
-The web interface and other database adapters will be added in later phases.
+The server serves the built web assets and browser routes from the same origin.
+Other database adapters will be added in later phases.
 SQLite's `listTables`, `getTable`, and `listRelationships` operations are
 implemented. Statistics and profiling still reject with `UnsupportedOperationError`;
 capability flags indicate unavailable features. `objectTypes` describes engine
@@ -44,6 +46,16 @@ shutdown, the complete fixture schema, SQLite-specific edge cases, and JSON API
 success, validation, missing-resource, parser, and adapter-failure responses.
 They need no container runtime. The CLI tests use `--no-browser` so they
 do not launch desktop applications.
+
+Component tests cover navigator virtualization, command selection, and table
+metadata. Browser tests exercise file import, relationship navigation, history,
+deep links, saved paths, and failure states against the real server. Install the
+browser once, then run:
+
+```sh
+pnpm exec playwright install --with-deps chromium
+pnpm test:e2e
+```
 
 `tests/fixtures/sample.db` is a small committed SQLite database.
 `tests/fixtures/sample.sql` is its source schema and seed data, covering composite

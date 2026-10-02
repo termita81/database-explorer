@@ -12,7 +12,7 @@ describe('Local application', () => {
       expect(new URL(url).port).not.toBe('0');
       const response = await fetch(url);
       expect(response.headers.get('content-type')).toContain('text/html');
-      expect(await response.text()).toContain('Start DB Explorer');
+      expect(await response.text()).toContain('id="app"');
       expect(connections.list()).toEqual([]);
       const api = await fetch(`${url}/api/connections`);
       expect(api.status).toBe(200);
@@ -25,7 +25,7 @@ describe('Local application', () => {
     const { app, connections } = await startApplication(fixture);
     const connection = connections.list()[0]!.connection;
     try {
-      expect((await app.inject('/')).body).toContain('Connected read-only');
+      expect((await app.inject('/')).body).toContain('id="app"');
       await expect(connection.testConnection()).resolves.toBeUndefined();
     } finally {
       await app.close();

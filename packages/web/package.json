@@ -1,0 +1,28 @@
+{
+  "name": "@db-explorer/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./dist/index.html",
+  "scripts": {
+    "build": "vue-tsc --noEmit && vite build",
+    "typecheck": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@db-explorer/core": "workspace:*",
+    "vue": "^3.5.22",
+    "vue-router": "^4.5.1",
+    "pinia": "^3.0.3",
+    "@tanstack/vue-query": "^5.90.2",
+    "@tanstack/vue-virtual": "^3.13.12",
+    "naive-ui": "^2.43.1",
+    "lucide-vue-next": "^0.468.0"
+  },
+  "devDependencies": {
+    "vite": "^6.4.1",
+    "@vitejs/plugin-vue": "^5.2.4",
+    "vue-tsc": "^3.1.0",
+    "@vue/test-utils": "^2.4.6",
+    "jsdom": "^26.1.0"
+  }
+}

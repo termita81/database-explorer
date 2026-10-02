@@ -1,3 +1,6 @@
+import fastifyStatic from '@fastify/static';
+import { createRequire } from 'node:module';
+import { dirname, join, basename } from 'node:path';
 import Fastify from 'fastify';
 import type { DatabaseAdapter } from '@db-explorer/core';
 import { registerApi } from './api.js';
@@ -6,14 +9,6 @@ import { sqliteAdapter } from '@db-explorer/adapter-sqlite';
 import { ConnectionManager } from './connections.js';
 import { parseTarget } from './target.js';
 
-const escapeHtml = (text: string) =>
-  text.replace(
-    /[&<>"']/g,
-    (char) =>
-      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[
-        char
-      ]!,
-  );
 export async function createApplication(
   options: { target?: string; adapters?: DatabaseAdapter[] } = {},
 ) {
@@ -51,18 +46,24 @@ export async function createApplication(
   registerApi(app, connections);
   try {
     const initial = target === undefined ? undefined : parseTarget(target);
-    if (initial) await connections.open(initial.adapterId, initial.config);
-    app.get('/', async (_request, reply) => {
-      const message =
-        target === undefined
-          ? 'Start DB Explorer with a SQLite file path to connect.'
-          : `Connected read-only to ${target}.`;
-      return reply
-        .type('text/html; charset=utf-8')
-        .send(
-          `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>DB Explorer</title></head><body><main><h1>DB Explorer</h1><p>${escapeHtml(message)}</p><p>Schema browsing will arrive in the next phases.</p></main></body></html>`,
-        );
+    if (initial)
+      await connections.open(initial.adapterId, initial.config, {
+        label: basename((initial.config as { path: string }).path ?? target!),
+      });
+    const webRoot = dirname(
+      createRequire(import.meta.url).resolve('@db-explorer/web'),
+    );
+    app.register(fastifyStatic, {
+      root: join(webRoot, 'assets'),
+      prefix: '/assets/',
+      index: false,
     });
+    app.get('/', async (_request, reply) =>
+      reply.sendFile('index.html', webRoot),
+    );
+    app.get('/connections/*', async (_request, reply) =>
+      reply.sendFile('index.html', webRoot),
+    );
     return { app, connections };
   } catch (error) {
     await app.close();

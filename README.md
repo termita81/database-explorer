@@ -1,9 +1,7 @@
 # DB Explorer
 
-A local, read-only database explorer. Phases 1–3 implement the core adapter
-contract, SQLite connections, schema introspection, relationship graphs, and a
-validated JSON API. The browser currently shows a startup screen; the browsing
-interface comes in Phase 4.
+A local, read-only database explorer. Phases 1–4 implement SQLite connections, schema introspection, relationship
+graphs, a validated JSON API, and a Vue browser interface for exploring tables.
 
 ## Run
 
@@ -31,6 +29,21 @@ SQLite accepts an existing file path, a `file:` URL, or a
 are opened read-only and never created automatically. PostgreSQL, MySQL/MariaDB,
 SQL Server, and Oracle connection strings are recognized, but their adapters are
 not available yet; startup reports an error without printing credentials.
+
+## Browser interface
+
+Open a live connection from the home screen, choose a SQLite file, drop it anywhere,
+or enter a path on the server's filesystem. File uploads open a temporary read-only
+copy (up to 100 MB), removed when the connection closes or the server shuts down.
+
+Search the virtualized navigator or press Cmd/Ctrl+K to find tables. Object tabs
+show overview, columns, keys and constraints, indexes, and relationships. Click
+foreign-key targets to navigate; browser back/forward and table deep links work
+while the server connection remains open.
+
+Recent and saved names and paths use browser localStorage for the current origin.
+A new server port has separate storage. Imported files must be selected again;
+persistent OS-level profiles are planned for Phase 5.
 
 ## SQLite introspection
 
@@ -60,18 +73,21 @@ JS
 
 The API is served at the URL printed by the CLI. A database opened on the command
 line appears in `GET /api/connections`. Connection responses contain an ID,
-adapter ID, and capabilities; they never contain configuration or credentials.
+adapter ID, capabilities, and an optional display label; they never contain configuration or credentials.
 
 | Method | Path                                     | Result                     |
 | ------ | ---------------------------------------- | -------------------------- |
 | GET    | `/api/connections`                       | Open connections           |
 | POST   | `/api/connections`                       | Open a connection (201)    |
+| POST   | `/api/connections/upload?name=sample.db` | Upload a SQLite copy (201) |
 | GET    | `/api/connections/:id`                   | Connection metadata        |
 | DELETE | `/api/connections/:id`                   | Close a connection (204)   |
 | GET    | `/api/connections/:id/schemas`           | Schema names               |
 | GET    | `/api/connections/:id/tables`            | Table summaries            |
 | GET    | `/api/connections/:id/tables/:tableName` | Full table detail          |
 | GET    | `/api/connections/:id/relationships`     | Directed foreign-key edges |
+
+Uploads use an `application/octet-stream` body containing the database bytes.
 
 Table and relationship routes accept `?schema=main`. Without that filter, table
 and relationship lists cover the connection. Table detail can omit the schema

@@ -2,10 +2,16 @@ import { randomUUID } from 'node:crypto';
 import { UnknownAdapterError, UnknownConnectionError } from './errors.js';
 import type { DatabaseAdapter, DatabaseConnection } from '@db-explorer/core';
 
+export interface ConnectionOptions {
+  label?: string;
+  onClose?: () => Promise<void>;
+}
 export interface ManagedConnection {
   id: string;
   adapterId: string;
   connection: DatabaseConnection;
+  label?: string;
+  onClose?: () => Promise<void>;
 }
 export class ConnectionManager {
   private readonly adapters = new Map<string, DatabaseAdapter>();
@@ -20,7 +26,11 @@ export class ConnectionManager {
       this.adapters.set(adapter.id, adapter);
     }
   }
-  open(adapterId: string, config: unknown): Promise<ManagedConnection> {
+  open(
+    adapterId: string,
+    config: unknown,
+    options: ConnectionOptions = {},
+  ): Promise<ManagedConnection> {
     if (this.closed)
       return Promise.reject(new Error('Connection manager is closed.'));
     const adapter = this.adapters.get(adapterId);
@@ -28,7 +38,7 @@ export class ConnectionManager {
       return Promise.reject(
         new UnknownAdapterError(adapterId, [...this.adapters.keys()]),
       );
-    const task = this.connect(adapter, config);
+    const task = this.connect(adapter, config, options);
     this.pending.add(task);
     void task.then(
       () => this.pending.delete(task),
@@ -39,6 +49,7 @@ export class ConnectionManager {
   private async connect(
     adapter: DatabaseAdapter,
     config: unknown,
+    options: ConnectionOptions,
   ): Promise<ManagedConnection> {
     const connection = await adapter.connect(config);
     try {
@@ -48,7 +59,12 @@ export class ConnectionManager {
       await connection.close();
       throw error;
     }
-    const managed = { id: randomUUID(), adapterId: adapter.id, connection };
+    const managed = {
+      id: randomUUID(),
+      adapterId: adapter.id,
+      connection,
+      ...options,
+    };
     this.connections.set(managed.id, managed);
     return managed;
   }
@@ -63,7 +79,11 @@ export class ConnectionManager {
   async close(id: string): Promise<void> {
     const managed = this.get(id);
     this.connections.delete(id);
-    await managed.connection.close();
+    try {
+      await managed.connection.close();
+    } finally {
+      await managed.onClose?.();
+    }
   }
   closeAll(): Promise<void> {
     if (this.closing) return this.closing;

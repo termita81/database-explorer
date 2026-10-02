@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -18,7 +21,11 @@ const tableParams = connectionParams.extend({ tableName: identifier });
 const schemaQuery = z.object({ schema: identifier.optional() }).strict();
 const emptyQuery = z.object({}).strict();
 const openBody = z
-  .object({ adapterId: identifier, config: z.record(z.string(), z.unknown()) })
+  .object({
+    adapterId: identifier,
+    config: z.record(z.string(), z.unknown()),
+    label: z.string().min(1).max(200).optional(),
+  })
   .strict();
 
 function publicConnection(managed: ManagedConnection) {
@@ -26,6 +33,7 @@ function publicConnection(managed: ManagedConnection) {
     id: managed.id,
     adapterId: managed.adapterId,
     capabilities: managed.connection.capabilities,
+    ...(managed.label === undefined ? {} : { label: managed.label }),
   };
 }
 export function registerApi(
@@ -141,6 +149,52 @@ export function registerApi(
         reply.header('Cache-Control', 'no-store');
       });
 
+      const uploadLimit = 100 * 1024 * 1024;
+      api.addContentTypeParser(
+        'application/octet-stream',
+        { parseAs: 'buffer', bodyLimit: uploadLimit },
+        (_request, body, done) => done(null, body),
+      );
+      api.post(
+        '/connections/upload',
+        { bodyLimit: uploadLimit },
+        async (request, reply) => {
+          const { name } = z
+            .object({ name: z.string().min(1).max(200) })
+            .strict()
+            .parse(request.query);
+          if (!Buffer.isBuffer(request.body) || request.body.length === 0)
+            throw new ApiError(
+              400,
+              'INVALID_FILE',
+              'Choose a nonempty SQLite database file.',
+            );
+          const directory = await mkdtemp(
+            join(tmpdir(), 'db-explorer-upload-'),
+          );
+          const cleanup = () => rm(directory, { recursive: true, force: true });
+          try {
+            const path = join(directory, 'database.db');
+            await writeFile(path, request.body, { mode: 0o600 });
+            const managed = await connections.open(
+              'sqlite',
+              { path },
+              { label: name, onClose: cleanup },
+            );
+            return reply
+              .code(201)
+              .header('Location', `/api/connections/${managed.id}`)
+              .send(publicConnection(managed));
+          } catch {
+            await cleanup();
+            throw new ApiError(
+              422,
+              'CONNECTION_FAILED',
+              'Unable to open this file as a SQLite database.',
+            );
+          }
+        },
+      );
       api.get('/connections', async (request) => {
         emptyQuery.parse(request.query);
         return connections.list().map(publicConnection);
@@ -149,7 +203,9 @@ export function registerApi(
         emptyQuery.parse(request.query);
         const body = openBody.parse(request.body);
         try {
-          const managed = await connections.open(body.adapterId, body.config);
+          const managed = await connections.open(body.adapterId, body.config, {
+            label: body.label,
+          });
           return reply
             .code(201)
             .header('Location', `/api/connections/${managed.id}`)

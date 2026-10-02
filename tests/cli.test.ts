@@ -66,9 +66,9 @@ describe('Built CLI', () => {
     try {
       const response = await fetch(url);
       expect(response.ok).toBe(true);
-      expect(await response.text()).toContain(
-        args.length ? 'Connected read-only' : 'Start DB Explorer',
-      );
+      expect(await response.text()).toContain('id="app"');
+      const connections = await (await fetch(`${url}/api/connections`)).json();
+      expect(connections).toHaveLength(args.length ? 1 : 0);
     } finally {
       await stop(child);
     }
