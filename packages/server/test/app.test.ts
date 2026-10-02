@@ -14,6 +14,9 @@ describe('Local application', () => {
       expect(response.headers.get('content-type')).toContain('text/html');
       expect(await response.text()).toContain('Start DB Explorer');
       expect(connections.list()).toEqual([]);
+      const api = await fetch(`${url}/api/connections`);
+      expect(api.status).toBe(200);
+      expect(await api.json()).toEqual([]);
     } finally {
       await app.close();
     }

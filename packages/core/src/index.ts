@@ -142,3 +142,15 @@ export class UnsupportedOperationError extends Error {
     this.name = 'UnsupportedOperationError';
   }
 }
+
+export class DatabaseObjectNotFoundError extends Error {
+  constructor(
+    readonly objectType: 'schema' | 'table',
+    message: string,
+  ) {
+    super(message);
+    this.name = 'DatabaseObjectNotFoundError';
+  }
+}
+
+export { buildRelationshipGraph } from './relationships.js';

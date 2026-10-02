@@ -15,7 +15,8 @@
     "@db-explorer/core": "workspace:*",
     "@db-explorer/adapter-sqlite": "workspace:*",
     "fastify": "^5.6.1",
-    "open": "^10.2.0"
+    "open": "^10.2.0",
+    "zod": "^4.1.12"
   },
   "bin": {
     "db-explorer": "dist/cli.js"

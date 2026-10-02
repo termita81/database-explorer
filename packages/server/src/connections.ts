@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { UnknownAdapterError, UnknownConnectionError } from './errors.js';
 import type { DatabaseAdapter, DatabaseConnection } from '@db-explorer/core';
 
 export interface ManagedConnection {
@@ -25,9 +26,7 @@ export class ConnectionManager {
     const adapter = this.adapters.get(adapterId);
     if (!adapter)
       return Promise.reject(
-        new Error(
-          `Adapter "${adapterId}" is not available. Available adapters: ${[...this.adapters.keys()].join(', ')}.`,
-        ),
+        new UnknownAdapterError(adapterId, [...this.adapters.keys()]),
       );
     const task = this.connect(adapter, config);
     this.pending.add(task);
@@ -55,7 +54,7 @@ export class ConnectionManager {
   }
   get(id: string): ManagedConnection {
     const connection = this.connections.get(id);
-    if (!connection) throw new Error('Unknown connection.');
+    if (!connection) throw new UnknownConnectionError();
     return connection;
   }
   list(): ManagedConnection[] {

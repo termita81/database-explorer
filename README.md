@@ -1,9 +1,9 @@
 # DB Explorer
 
-A local, read-only database explorer. Phases 1 and 2 implement the core adapter
-contract, SQLite connections, command-line startup, and schema introspection.
-The browser currently shows a startup screen; the JSON API and browsing interface
-are planned for subsequent phases.
+A local, read-only database explorer. Phases 1–3 implement the core adapter
+contract, SQLite connections, schema introspection, relationship graphs, and a
+validated JSON API. The browser currently shows a startup screen; the browsing
+interface comes in Phase 4.
 
 ## Run
 
@@ -48,12 +48,63 @@ import { sqliteAdapter } from './packages/adapter-sqlite/dist/index.js';
 const connection = await sqliteAdapter.connect({ path: './tests/fixtures/sample.db' });
 try {
   console.log(await connection.listTables());
+  console.dir(await connection.listRelationships(), { depth: null });
   console.dir(await connection.getTable({ schema: 'main', name: 'memberships' }), { depth: null });
 } finally {
   await connection.close();
 }
 JS
 ```
+
+## JSON API
+
+The API is served at the URL printed by the CLI. A database opened on the command
+line appears in `GET /api/connections`. Connection responses contain an ID,
+adapter ID, and capabilities; they never contain configuration or credentials.
+
+| Method | Path                                     | Result                     |
+| ------ | ---------------------------------------- | -------------------------- |
+| GET    | `/api/connections`                       | Open connections           |
+| POST   | `/api/connections`                       | Open a connection (201)    |
+| GET    | `/api/connections/:id`                   | Connection metadata        |
+| DELETE | `/api/connections/:id`                   | Close a connection (204)   |
+| GET    | `/api/connections/:id/schemas`           | Schema names               |
+| GET    | `/api/connections/:id/tables`            | Table summaries            |
+| GET    | `/api/connections/:id/tables/:tableName` | Full table detail          |
+| GET    | `/api/connections/:id/relationships`     | Directed foreign-key edges |
+
+Table and relationship routes accept `?schema=main`. Without that filter, table
+and relationship lists cover the connection. Table detail can omit the schema
+only when the connection exposes a single schema. URL-encode table names and
+schema query values.
+
+For example, replace the URL below with the printed URL:
+
+```sh
+DB_EXPLORER_URL='http://127.0.0.1:12345'
+curl "$DB_EXPLORER_URL/api/connections"
+curl -X POST "$DB_EXPLORER_URL/api/connections" \
+  -H 'Content-Type: application/json' \
+  -d '{"adapterId":"sqlite","config":{"path":"./tests/fixtures/sample.db"}}'
+```
+
+Use the returned ID in subsequent requests. Each relationship contains `from`,
+`to`, and `foreignKey`; a composite key produces one edge with ordered column
+arrays, and a self-reference has the same source and destination.
+
+Errors share the shape below (validation errors also include field details):
+
+```json
+{
+  "error": { "code": "CONNECTION_NOT_FOUND", "message": "Unknown connection." }
+}
+```
+
+Invalid requests return 400, unavailable connections or objects return 404,
+failed database opens return 422, unsupported operations return 501, and
+unexpected failures return 500 with a generic message. Oversized bodies return
+413 and overly long path parameters return 414. Browser requests must
+come from the same origin, and requests must use a loopback Host header.
 
 ## Develop
 

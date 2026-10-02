@@ -92,6 +92,32 @@ export function defineAdapterConformanceSuite(
         );
       }
     });
+    it('derives every fixture relationship from its foreign keys', async (context) => {
+      if (!connection.capabilities.introspection) {
+        context.skip();
+        return;
+      }
+      const expected = options.expectedTables.flatMap((table) =>
+        table.foreignKeys.map((foreignKey) => ({
+          from: { schema: table.schema, name: table.name },
+          to: foreignKey.referencedTable,
+          foreignKey,
+        })),
+      );
+      const sort = (edges: unknown[]) =>
+        edges.map((edge) => JSON.stringify(edge)).sort();
+      expect(sort(await connection.listRelationships())).toEqual(
+        sort(expected),
+      );
+      for (const schema of options.expectedSchemas) {
+        expect(sort(await connection.listRelationships(schema))).toEqual(
+          sort(expected.filter((edge) => edge.from.schema === schema.name)),
+        );
+      }
+      expect(await connection.listRelationships()).toEqual(
+        await connection.listRelationships(),
+      );
+    });
     it('rejects an unknown table', async (context) => {
       if (!connection.capabilities.introspection) {
         context.skip();
@@ -121,6 +147,7 @@ export function defineAdapterConformanceSuite(
       await expect(connection.testConnection()).rejects.toThrow();
       if (connection.capabilities.introspection) {
         await expect(connection.listTables()).rejects.toThrow();
+        await expect(connection.listRelationships()).rejects.toThrow();
         for (const table of options.expectedTables)
           await expect(connection.getTable(table)).rejects.toThrow();
       }

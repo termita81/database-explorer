@@ -17,14 +17,14 @@ need Python and a C/C++ build toolchain for installation.
 
 ## Packages
 
-- `packages/core`: canonical model, adapter interface, and capabilities.
+- `packages/core`: canonical model, adapter interface, capabilities, and relationship graph builder.
 - `packages/adapter-sqlite`: read-only SQLite connections and schema introspection.
 - `packages/adapter-testkit`: shared adapter lifecycle and introspection conformance suite.
-- `packages/server`: connection manager, Fastify startup screen, and CLI.
+- `packages/server`: connection manager, validated JSON API, Fastify startup screen, and CLI.
 
 The web interface and other database adapters will be added in later phases.
-SQLite's `listTables` and `getTable` operations are implemented. Relationship
-graphs, statistics, and profiling still reject with `UnsupportedOperationError`;
+SQLite's `listTables`, `getTable`, and `listRelationships` operations are
+implemented. Statistics and profiling still reject with `UnsupportedOperationError`;
 capability flags indicate unavailable features. `objectTypes` describes engine
 object kinds; the current introspection API covers tables only.
 
@@ -40,7 +40,8 @@ pnpm format:check
 
 Tests cover connection lifecycle, invalid configurations, write rejection by the
 real SQLite driver, target parsing, HTTP startup, and the built CLI's startup and
-shutdown, plus the complete fixture schema and SQLite-specific edge cases.
+shutdown, the complete fixture schema, SQLite-specific edge cases, and JSON API
+success, validation, missing-resource, parser, and adapter-failure responses.
 They need no container runtime. The CLI tests use `--no-browser` so they
 do not launch desktop applications.
 
@@ -85,3 +86,23 @@ that engine's equivalent fixture schema; `normalizeTable` supports differences
 in engine-specific types or index details. Introspection tests skip when the
 capability is absent, and write-rejection tests skip for credentials-only
 read-only enforcement. The conformance suite will grow with later roadmap phases.
+
+## API development
+
+`createApplication` builds a Fastify instance without listening; use `app.inject`
+for API tests and `app.close` to release database connections. `startApplication`
+adds the loopback listener on an ephemeral port. The server accepts an adapter
+list for tests and future engine support.
+
+The API validates bodies, parameters, and query strings with Zod. Connection
+configuration is validated by the adapter, keeping engine-specific logic out of
+the server. Core `DatabaseObjectNotFoundError` and server connection errors map
+to stable HTTP error codes; unexpected adapter messages are not returned to the
+client. Unknown routes and malformed JSON use the same error envelope. The
+local API rejects non-loopback Hosts and cross-origin browser requests, and
+responses are marked `Cache-Control: no-store`.
+
+`buildRelationshipGraph` in the core maps each foreign key to one directed edge,
+retaining composite column ordering, self-references, parallel edges, and
+unresolved targets. SQLite reads the complete graph in a single read transaction.
+The shared conformance suite now checks fixture relationships and their stability.

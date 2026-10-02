@@ -7,7 +7,7 @@ import {
   type DatabaseConnection,
 } from '@db-explorer/core';
 import { openReadOnlyDatabase } from './database.js';
-import { getTable, listTables } from './introspection.js';
+import { getTable, listTables, listRelationships } from './introspection.js';
 
 export const sqliteCapabilities: Capabilities = Object.freeze({
   schemas: false,
@@ -63,7 +63,10 @@ export const sqliteAdapter: DatabaseAdapter = {
         assertOpen();
         return getTable(database, ref);
       },
-      listRelationships: () => unavailable('Relationships'),
+      async listRelationships(schema) {
+        assertOpen();
+        return listRelationships(database, schema);
+      },
       getTableMetadataStats: () => unavailable('Metadata statistics'),
       profileTable: () => unavailable('Active profiling'),
       sampleRows: () => unavailable('Row sampling'),

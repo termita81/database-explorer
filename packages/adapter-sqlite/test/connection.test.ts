@@ -85,8 +85,8 @@ describe('SQLite connection', () => {
     const connection = await sqliteAdapter.connect({ path: fixture });
     connections.push(connection);
     expect(connection.capabilities.introspection).toBe(true);
-    await expect(connection.listRelationships()).rejects.toThrow(
-      'not implemented',
-    );
+    await expect(
+      connection.getTableMetadataStats({ schema: 'main', name: 'teams' }),
+    ).rejects.toThrow('not implemented');
   });
 });

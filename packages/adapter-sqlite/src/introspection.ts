@@ -1,3 +1,7 @@
+import {
+  buildRelationshipGraph,
+  DatabaseObjectNotFoundError,
+} from '@db-explorer/core';
 import type Database from 'better-sqlite3';
 import type {
   ForeignKey,
@@ -44,7 +48,10 @@ interface ForeignKeyRow {
 
 function assertSchema(schema: SchemaRef): void {
   if (schema.name.toLowerCase() !== 'main')
-    throw new Error('Unknown schema. SQLite exposes only main.');
+    throw new DatabaseObjectNotFoundError(
+      'schema',
+      'Unknown schema. SQLite exposes only main.',
+    );
 }
 // SQLite's default identifier comparison folds ASCII letters only.
 const foldName = (name: string) =>
@@ -147,7 +154,11 @@ export function getTable(
   return database
     .transaction((): TableDetail => {
       const table = tableRow(database, ref.name);
-      if (!table) throw new Error(`Unknown table: ${ref.name}`);
+      if (!table)
+        throw new DatabaseObjectNotFoundError(
+          'table',
+          `Unknown table: ${ref.name}`,
+        );
       const columns = columnsFor(database, table.name);
       const keyColumns = primaryKeyColumns(columns);
       const canonicalColumn = (name: string) =>
@@ -261,5 +272,18 @@ export function getTable(
         indexes,
       };
     })
+    .deferred();
+}
+
+export function listRelationships(
+  database: Database.Database,
+  schema?: SchemaRef,
+) {
+  return database
+    .transaction(() =>
+      buildRelationshipGraph(
+        listTables(database, schema).map((ref) => getTable(database, ref)),
+      ),
+    )
     .deferred();
 }
