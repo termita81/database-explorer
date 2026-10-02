@@ -20,7 +20,7 @@ need Python and a C/C++ build toolchain for installation.
 - `packages/core`: canonical model, adapter interface, capabilities, and relationship graph builder.
 - `packages/adapter-sqlite`: read-only SQLite connections and schema introspection.
 - `packages/adapter-testkit`: shared adapter lifecycle and introspection conformance suite.
-- `packages/server`: connection manager, validated JSON API, Fastify static hosting, and CLI.
+- `packages/server`: connection manager, disk profiles, keychain boundary, validated JSON API, Fastify static hosting, and CLI.
 - `packages/web`: Vue interface, routing, query cache, and virtualized navigation.
 
 The server serves the built web assets and browser routes from the same origin.
@@ -118,3 +118,29 @@ responses are marked `Cache-Control: no-store`.
 retaining composite column ordering, self-references, parallel edges, and
 unresolved targets. SQLite reads the complete graph in a single read transaction.
 The shared conformance suite now checks fixture relationships and their stability.
+
+## Profiles and credentials
+
+`ProfileStore` uses `env-paths` for the OS configuration directory. It reads a
+versioned strict schema and writes with a same-directory temporary file and atomic
+rename. `proper-lockfile` serializes updates across processes. New profile files
+use mode 0600 and their application directory uses mode 0700 on POSIX.
+Corrupt or unsupported files remain untouched and produce a useful error.
+
+Profiles keep unresolved fields and preferences. `resolveEnvironment` substitutes
+`${VARIABLE}` exactly once; typed port and SSL references are validated. Local
+paths retain their saved base directory. Tests can inject a configuration path,
+an environment map, and a `PasswordStore` into `ProfileStore`; pass the store to
+`createApplication({ profiles })` or `startApplication(undefined, { profiles })`.
+Browser tests use a temporary configuration directory and never the developer's
+profile file or keychain.
+
+`OsPasswordStore` lazily loads `@napi-rs/keyring` and uses asynchronous entries with
+the `db-explorer` service name. Linux entries require Secret Service, avoiding an
+in-memory kernel keyring fallback. Native failures are redacted. Profile tests
+inject a substitute keychain and cover rotation, deletion, missing entries,
+locked-store failures, and rollback when file writes fail. The native boundary is
+also tested with a substituted binding; tests never create real OS credentials.
+
+See [the Phase 5 credential review](docs/phase-5-security-review.md) for the
+persistence boundaries and failure behavior.

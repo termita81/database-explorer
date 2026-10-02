@@ -1,9 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { UnknownAdapterError, UnknownConnectionError } from './errors.js';
-import type { DatabaseAdapter, DatabaseConnection } from '@db-explorer/core';
+import type {
+  DatabaseAdapter,
+  DatabaseConnection,
+  ConnectionPreferences,
+} from '@db-explorer/core';
 
 export interface ConnectionOptions {
   label?: string;
+  profileId?: string;
+  preferences?: ConnectionPreferences;
   onClose?: () => Promise<void>;
 }
 export interface ManagedConnection {
@@ -11,6 +17,8 @@ export interface ManagedConnection {
   adapterId: string;
   connection: DatabaseConnection;
   label?: string;
+  profileId?: string;
+  preferences?: ConnectionPreferences;
   onClose?: () => Promise<void>;
 }
 export class ConnectionManager {

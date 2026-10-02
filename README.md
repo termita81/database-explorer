@@ -1,7 +1,8 @@
 # DB Explorer
 
-A local, read-only database explorer. Phases 1–4 implement SQLite connections, schema introspection, relationship
-graphs, a validated JSON API, and a Vue browser interface for exploring tables.
+A local, read-only database explorer. Phases 1–5 implement SQLite connections, schema introspection, relationship
+graphs, persistent connection profiles, a validated JSON API, and a Vue browser
+interface for exploring tables.
 
 ## Run
 
@@ -41,9 +42,42 @@ show overview, columns, keys and constraints, indexes, and relationships. Click
 foreign-key targets to navigate; browser back/forward and table deep links work
 while the server connection remains open.
 
-Recent and saved names and paths use browser localStorage for the current origin.
-A new server port has separate storage. Imported files must be selected again;
-persistent OS-level profiles are planned for Phase 5.
+Recent names and paths use browser localStorage for the current origin. Imported
+files must be selected again. Saved connection profiles live on disk and survive
+server restarts and port changes. Existing browser-saved connections can be moved
+to the profile file with **Import browser profiles** on the home screen.
+
+## Saved profiles
+
+Enter a local SQLite path, enable **Save connection profile**, and connect. Saved
+profiles can be reopened, renamed, edited, or removed from the home screen.
+The active-profiling preference is saved with each profile and applied on its next
+connection; profiling itself arrives in Phase 7. Its default is on for SQLite and
+off for network databases.
+
+The configuration file is `profiles.json` in the OS configuration directory:
+
+- macOS: `~/Library/Preferences/db-explorer/`
+- Linux: `$XDG_CONFIG_HOME/db-explorer/` or `~/.config/db-explorer/`
+- Windows: `%APPDATA%\db-explorer\Config\`
+
+Literal relative paths are anchored when saved. Connection fields support
+`${VARIABLE}` references to the server process's environment. For example, start
+with `DATABASE_PATH=/absolute/path/sample.db pnpm dev`, then save `${DATABASE_PATH}`
+as the database path. References stay unresolved in the file and are expanded on
+each reconnect. An unset variable produces an actionable error. Port and SSL
+references must resolve to a valid port number and `true` or `false`, respectively.
+
+The profile API accepts separate connection fields, never credential-bearing
+connection strings. Literal passwords belong in a transient top-level `password`
+field. By default they are not saved; use `credential: "prompt"` to enter a password
+on each reconnect, `credential: "keychain"` to explicitly store it in the OS keychain,
+or `config.password: "${DB_PASSWORD}"` to read it from the environment. Keychain
+entries and resolved environment values are never returned by the API or written
+to the configuration file. Linux uses a persistent Secret Service provider; a
+locked or unavailable keychain produces an error and permits a transient password
+at reconnect. SQLite needs no password; network adapters are still planned for
+later phases.
 
 ## SQLite introspection
 
@@ -88,6 +122,24 @@ adapter ID, capabilities, and an optional display label; they never contain conf
 | GET    | `/api/connections/:id/relationships`     | Directed foreign-key edges |
 
 Uploads use an `application/octet-stream` body containing the database bytes.
+
+Saved profiles have their own routes:
+
+| Method | Path                        | Result                                  |
+| ------ | --------------------------- | --------------------------------------- |
+| GET    | `/api/profiles`             | Saved profiles                          |
+| POST   | `/api/profiles`             | Save a profile (201)                    |
+| GET    | `/api/profiles/:id`         | Profile fields and preferences          |
+| PUT    | `/api/profiles/:id`         | Replace editable profile fields         |
+| DELETE | `/api/profiles/:id`         | Remove profile and keychain entry (204) |
+| POST   | `/api/profiles/:id/connect` | Open a saved profile (201)              |
+
+For example, POST a profile with
+`{"name":"Sample","adapterId":"sqlite","config":{"path":"${DATABASE_PATH}"},"preferences":{"activeProfiling":false}}`.
+The connect route accepts `{}` or a transient `{"password":"..."}` for a password
+profile. A missing prompted password returns `409 PASSWORD_REQUIRED`; an
+unavailable keychain or profile file returns 503. Connecting returns only connection
+metadata, including the profile ID and preferences.
 
 Table and relationship routes accept `?schema=main`. Without that filter, table
 and relationship lists cover the connection. Table detail can omit the schema

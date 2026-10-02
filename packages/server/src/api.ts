@@ -3,6 +3,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { ProfileStore } from './profiles.js';
+import { registerProfileRoutes } from './profile-api.js';
+import { resolveEnvironment } from './environment.js';
 import {
   DatabaseObjectNotFoundError,
   UnsupportedOperationError,
@@ -25,6 +28,7 @@ const openBody = z
     adapterId: identifier,
     config: z.record(z.string(), z.unknown()),
     label: z.string().min(1).max(200).optional(),
+    preferences: z.object({ activeProfiling: z.boolean() }).strict().optional(),
   })
   .strict();
 
@@ -33,12 +37,19 @@ function publicConnection(managed: ManagedConnection) {
     id: managed.id,
     adapterId: managed.adapterId,
     capabilities: managed.connection.capabilities,
+    ...(managed.profileId === undefined
+      ? {}
+      : { profileId: managed.profileId }),
+    ...(managed.preferences === undefined
+      ? {}
+      : { preferences: managed.preferences }),
     ...(managed.label === undefined ? {} : { label: managed.label }),
   };
 }
 export function registerApi(
   app: FastifyInstance,
   connections: ConnectionManager,
+  profiles: ProfileStore,
 ): void {
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {
@@ -149,6 +160,8 @@ export function registerApi(
         reply.header('Cache-Control', 'no-store');
       });
 
+      registerProfileRoutes(api, connections, profiles, publicConnection);
+
       const uploadLimit = 100 * 1024 * 1024;
       api.addContentTypeParser(
         'application/octet-stream',
@@ -203,15 +216,21 @@ export function registerApi(
         emptyQuery.parse(request.query);
         const body = openBody.parse(request.body);
         try {
-          const managed = await connections.open(body.adapterId, body.config, {
-            label: body.label,
-          });
+          const managed = await connections.open(
+            body.adapterId,
+            resolveEnvironment(body.config),
+            {
+              label: body.label,
+              preferences: body.preferences,
+            },
+          );
           return reply
             .code(201)
             .header('Location', `/api/connections/${managed.id}`)
             .send(publicConnection(managed));
         } catch (error) {
           if (
+            error instanceof ApiError ||
             error instanceof z.ZodError ||
             error instanceof UnknownAdapterError
           )

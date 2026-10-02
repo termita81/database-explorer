@@ -29,7 +29,7 @@ export const useWorkspace = defineStore('workspace', () => {
   const opening = ref(false);
   const connectionError = ref('');
   const recent = ref(loadProfiles('db-explorer.recent'));
-  const saved = ref(loadProfiles('db-explorer.saved'));
+  const legacySaved = ref(loadProfiles('db-explorer.saved'));
   const storageError = ref('');
   function persist(key: string, profiles: Profile[]) {
     try {
@@ -37,10 +37,10 @@ export const useWorkspace = defineStore('workspace', () => {
       storageError.value = '';
     } catch {
       storageError.value =
-        'Browser storage is unavailable. Connections will not be remembered.';
+        'Browser storage is unavailable. Recent connections will not be remembered in this browser.';
     }
   }
-  function remember(profile: Profile, save = false) {
+  function remember(profile: Profile) {
     const different = (other: Profile) =>
       !(
         profile.kind === other.kind &&
@@ -48,14 +48,10 @@ export const useWorkspace = defineStore('workspace', () => {
       );
     recent.value = [profile, ...recent.value.filter(different)].slice(0, 8);
     persist('db-explorer.recent', recent.value);
-    if (save) {
-      saved.value = [profile, ...saved.value.filter(different)].slice(0, 20);
-      persist('db-explorer.saved', saved.value);
-    }
   }
-  function forget(profile: Profile) {
-    saved.value = saved.value.filter((item) => item !== profile);
-    persist('db-explorer.saved', saved.value);
+  function forgetLegacy(profile: Profile) {
+    legacySaved.value = legacySaved.value.filter((item) => item !== profile);
+    persist('db-explorer.saved', legacySaved.value);
   }
   function addTab(id: string, table: TableRef) {
     const open = tabs.value[id] ?? [];
@@ -77,10 +73,10 @@ export const useWorkspace = defineStore('workspace', () => {
     opening,
     connectionError,
     recent,
-    saved,
+    legacySaved,
+    forgetLegacy,
     storageError,
     remember,
-    forget,
     addTab,
     closeTab,
   };

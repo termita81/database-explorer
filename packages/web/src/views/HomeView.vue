@@ -2,7 +2,7 @@
 import { ref } from 'vue';
 import { useQuery, useQueryClient } from '@tanstack/vue-query';
 import { useRouter } from 'vue-router';
-import { NButton, NInput, NCheckbox } from 'naive-ui';
+import { NButton, NInput, NCheckbox, NModal } from 'naive-ui';
 import {
   Database,
   Upload,
@@ -12,18 +12,153 @@ import {
   Bookmark,
   X,
   Plug,
+  Pencil,
 } from 'lucide-vue-next';
-import { api } from '../api';
+import type { ConnectionProfile, CredentialSource } from '@db-explorer/core';
+import { api, ApiError } from '../api';
 import { useWorkspace, type Profile } from '../store';
 import { useConnectionActions } from '../actions';
 const workspace = useWorkspace();
 const router = useRouter();
 const queryClient = useQueryClient();
-const { openFile, openPath } = useConnectionActions();
+const { openFile, openPath, openProfile } = useConnectionActions();
 const connections = useQuery({
   queryKey: ['connections'],
   queryFn: ({ signal }) => api.connections(signal),
 });
+const profiles = useQuery({
+  queryKey: ['profiles'],
+  queryFn: ({ signal }) => api.profiles(signal),
+});
+const importing = ref(false);
+async function importLegacyProfiles() {
+  importing.value = true;
+  profileError.value = '';
+  try {
+    for (const profile of [...workspace.legacySaved]) {
+      if (profile.kind === 'path')
+        await api.saveProfile({
+          name: profile.name,
+          adapterId: 'sqlite',
+          config: { path: profile.path! },
+        });
+      workspace.forgetLegacy(profile);
+    }
+  } catch (error) {
+    profileError.value =
+      error instanceof Error
+        ? error.message
+        : 'Could not import browser profiles.';
+  } finally {
+    await queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    importing.value = false;
+  }
+}
+const activeProfiling = ref(true);
+const editing = ref<ConnectionProfile | null>(null);
+const editName = ref('');
+const editPath = ref('');
+const editProfiling = ref(true);
+const editCredential = ref<CredentialSource>('none');
+const editPassword = ref('');
+const editPasswordReference = ref('${DB_PASSWORD}');
+const credentialOptions = [
+  { label: 'No password', value: 'none' },
+  { label: 'Ask when connecting', value: 'prompt' },
+  { label: 'Store in the OS keychain', value: 'keychain' },
+  { label: 'Read from an environment variable', value: 'environment' },
+];
+function dismissEditor() {
+  editing.value = null;
+  editPassword.value = '';
+}
+const saving = ref(false);
+const profileError = ref('');
+const passwordProfile = ref<ConnectionProfile | null>(null);
+const password = ref('');
+function edit(profile: ConnectionProfile) {
+  editing.value = profile;
+  editName.value = profile.name;
+  editPath.value = profile.config.path ?? '';
+  editProfiling.value = profile.preferences.activeProfiling;
+  editCredential.value = profile.credential;
+  editPassword.value = '';
+  editPasswordReference.value = profile.config.password ?? '${DB_PASSWORD}';
+  profileError.value = '';
+}
+async function saveEdited() {
+  if (!editing.value || saving.value) return;
+  saving.value = true;
+  profileError.value = '';
+  try {
+    const profile = editing.value;
+    const config = { ...profile.config };
+    delete config.password;
+    if (
+      profile.adapterId !== 'sqlite' &&
+      editCredential.value === 'environment'
+    )
+      config.password = editPasswordReference.value;
+    await api.saveProfile(
+      {
+        name: editName.value,
+        adapterId: profile.adapterId,
+        config:
+          profile.adapterId === 'sqlite'
+            ? { ...config, path: editPath.value }
+            : config,
+        preferences: { activeProfiling: editProfiling.value },
+        credential:
+          profile.adapterId === 'sqlite' ? 'none' : editCredential.value,
+        ...(editCredential.value === 'keychain' && editPassword.value
+          ? { password: editPassword.value }
+          : {}),
+      },
+      profile.id,
+    );
+    await queryClient.invalidateQueries({ queryKey: ['profiles'] });
+    dismissEditor();
+  } catch (error) {
+    profileError.value =
+      error instanceof Error ? error.message : 'Could not save the profile.';
+  } finally {
+    saving.value = false;
+  }
+}
+async function remove(profile: ConnectionProfile) {
+  profileError.value = '';
+  try {
+    await api.deleteProfile(profile.id);
+    await queryClient.invalidateQueries({ queryKey: ['profiles'] });
+  } catch (error) {
+    profileError.value =
+      error instanceof Error ? error.message : 'Could not remove the profile.';
+  }
+}
+async function connectSaved(
+  profile: ConnectionProfile,
+  suppliedPassword?: string,
+) {
+  if (profile.credential === 'prompt' && suppliedPassword === undefined) {
+    password.value = '';
+    passwordProfile.value = profile;
+    return;
+  }
+  try {
+    if (await openProfile(profile, suppliedPassword)) {
+      password.value = '';
+      passwordProfile.value = null;
+    }
+  } catch (error) {
+    if (
+      error instanceof ApiError &&
+      ['PASSWORD_REQUIRED', 'KEYCHAIN_UNAVAILABLE'].includes(error.code)
+    ) {
+      password.value = '';
+      passwordProfile.value = profile;
+    }
+  }
+}
 const path = ref('');
 const name = ref('');
 const save = ref(false);
@@ -97,7 +232,7 @@ async function close(id: string) {
           <span class="chip">SQLite</span>
         </div>
         <p class="muted">Open the database directly on this machine.</p>
-        <form @submit.prevent="openPath(path, name, save)">
+        <form @submit.prevent="openPath(path, name, save, activeProfiling)">
           <label for="database-path">Database path</label
           ><NInput
             :input-props="{ id: 'database-path' }"
@@ -113,8 +248,15 @@ async function close(id: string) {
             placeholder="My database"
             :disabled="workspace.opening"
           />
+          <p class="field-help">
+            You can reference a server environment variable, for example
+            <code>${DATABASE_PATH}</code>.
+          </p>
+          <NCheckbox v-model:checked="activeProfiling"
+            >Allow active data profiling when available</NCheckbox
+          >
           <div class="form-footer">
-            <NCheckbox v-model:checked="save">Save in this browser</NCheckbox
+            <NCheckbox v-model:checked="save">Save connection profile</NCheckbox
             ><NButton
               attr-type="submit"
               type="primary"
@@ -206,29 +348,202 @@ async function close(id: string) {
           <Bookmark :size="18" />
           <h2>Saved connections</h2>
         </div>
-        <p v-if="!workspace.saved.length" class="empty-line">
+        <p v-if="workspace.legacySaved.length" class="field-help">
+          You have {{ workspace.legacySaved.length }} connection profiles from
+          the earlier browser storage.
+          <button
+            class="text-button"
+            :disabled="importing"
+            @click="importLegacyProfiles"
+          >
+            Import browser profiles
+          </button>
+        </p>
+        <p v-if="profiles.isPending.value" class="muted" role="status">
+          Loading profiles…
+        </p>
+        <p v-else-if="profiles.error.value" class="error-message" role="alert">
+          {{ profiles.error.value.message }}
+          <button class="text-button" @click="profiles.refetch()">
+            Try again
+          </button>
+        </p>
+        <p v-else-if="!profiles.data.value?.length" class="empty-line">
           Save a local path to reconnect in one click.
         </p>
         <div
-          v-for="profile in workspace.saved"
-          :key="profile.path"
+          v-for="profile in profiles.data.value"
+          :key="profile.id"
           class="saved-row"
         >
-          <button class="profile-row" @click="reopen(profile)">
+          <button
+            class="profile-row"
+            @click="connectSaved(profile)"
+            :disabled="workspace.opening"
+          >
             <Bookmark :size="18" /><span
               ><strong>{{ profile.name }}</strong
-              ><small>{{ profile.path }}</small></span
+              ><small>{{
+                profile.config.path ?? profile.adapterId
+              }}</small></span
             ><ArrowUpRight :size="16" /></button
           ><button
             class="icon-button"
+            :aria-label="`Edit saved ${profile.name}`"
+            @click="edit(profile)"
+          >
+            <Pencil :size="16" /></button
+          ><button
+            class="icon-button"
             :aria-label="`Remove saved ${profile.name}`"
-            @click="workspace.forget(profile)"
+            @click="remove(profile)"
           >
             <X :size="16" />
           </button>
         </div>
       </section>
     </div>
+    <p v-if="profileError && !editing" class="error-message" role="alert">
+      {{ profileError }}
+    </p>
+    <NModal :show="Boolean(editing)" @update:show="!$event && dismissEditor()">
+      <div
+        class="profile-dialog"
+        role="dialog"
+        aria-label="Edit connection profile"
+        aria-modal="true"
+      >
+        <h2>Edit connection profile</h2>
+        <form @submit.prevent="saveEdited">
+          <label for="profile-name">Profile name</label>
+          <NInput
+            v-model:value="editName"
+            :input-props="{ id: 'profile-name' }"
+          />
+          <template v-if="editing?.adapterId === 'sqlite'">
+            <label for="profile-path">Database path</label>
+            <NInput
+              v-model:value="editPath"
+              :input-props="{ id: 'profile-path' }"
+            />
+          </template>
+          <template v-if="editing?.adapterId !== 'sqlite'">
+            <label for="profile-credential-source">Password source</label>
+            <select
+              id="profile-credential-source"
+              v-model="editCredential"
+              class="profile-source"
+            >
+              <option
+                v-for="option in credentialOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </option>
+            </select>
+            <template v-if="editCredential === 'keychain'">
+              <label for="profile-stored-password"
+                >Password for the OS keychain</label
+              >
+              <NInput
+                v-model:value="editPassword"
+                type="password"
+                :input-props="{
+                  id: 'profile-stored-password',
+                  autocomplete: 'new-password',
+                }"
+                :placeholder="
+                  editing?.credential === 'keychain'
+                    ? 'Leave blank to keep the saved password'
+                    : 'Enter a password'
+                "
+              />
+            </template>
+            <template v-if="editCredential === 'environment'">
+              <label for="profile-password-reference"
+                >Password environment reference</label
+              >
+              <NInput
+                v-model:value="editPasswordReference"
+                :input-props="{ id: 'profile-password-reference' }"
+              />
+            </template>
+          </template>
+          <NCheckbox v-model:checked="editProfiling"
+            >Allow active data profiling when available</NCheckbox
+          >
+          <p class="field-help">
+            This preference will apply when you next reconnect. Profiling is
+            added in a later phase.
+          </p>
+          <p v-if="profileError" class="error-message" role="alert">
+            {{ profileError }}
+          </p>
+          <div class="form-footer">
+            <NButton @click="dismissEditor">Cancel</NButton
+            ><NButton
+              attr-type="submit"
+              type="primary"
+              :loading="saving"
+              :disabled="!editName.trim()"
+              >Save profile</NButton
+            >
+          </div>
+        </form>
+      </div>
+    </NModal>
+    <NModal
+      :show="Boolean(passwordProfile)"
+      @update:show="!$event && ((passwordProfile = null), (password = ''))"
+    >
+      <div
+        class="profile-dialog"
+        role="dialog"
+        aria-label="Connection password"
+        aria-modal="true"
+      >
+        <h2>Connect to {{ passwordProfile?.name }}</h2>
+        <form
+          @submit.prevent="
+            passwordProfile && connectSaved(passwordProfile, password)
+          "
+        >
+          <label for="profile-password">Password</label>
+          <NInput
+            v-model:value="password"
+            type="password"
+            :input-props="{
+              id: 'profile-password',
+              autocomplete: 'current-password',
+            }"
+          />
+          <p class="field-help">Used for this connection only.</p>
+          <p
+            v-if="workspace.connectionError"
+            class="error-message"
+            role="alert"
+          >
+            {{ workspace.connectionError }}
+          </p>
+          <div class="form-footer">
+            <NButton
+              @click="
+                passwordProfile = null;
+                password = '';
+              "
+              >Cancel</NButton
+            ><NButton
+              type="primary"
+              attr-type="submit"
+              :loading="workspace.opening"
+              :disabled="!password"
+              >Connect</NButton
+            >
+          </div>
+        </form>
+      </div>
+    </NModal>
     <footer class="home-footer">
       <span class="status-dot"></span> Runs locally. No account, no cloud, no
       changes to your data.

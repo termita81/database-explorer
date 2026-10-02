@@ -154,3 +154,11 @@ export class DatabaseObjectNotFoundError extends Error {
 }
 
 export { buildRelationshipGraph } from './relationships.js';
+
+export type {
+  ConnectionFields,
+  ConnectionPreferences,
+  CredentialSource,
+  ConnectionProfile,
+  ProfileInput,
+} from './profiles.js';

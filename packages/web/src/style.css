@@ -1253,3 +1253,33 @@ kbd {
     padding: 0 6px;
   }
 }
+
+.field-help {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 10px 0;
+}
+.profile-dialog {
+  width: min(480px, calc(100vw - 32px));
+  padding: 28px;
+  border-radius: 14px;
+  background: white;
+  box-shadow: 0 16px 60px rgb(35 45 80 / 18%);
+}
+.profile-dialog label {
+  display: block;
+  margin: 18px 0 8px;
+}
+.profile-dialog .n-checkbox {
+  margin-top: 16px;
+}
+.profile-source {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: white;
+  color: inherit;
+  font: inherit;
+}

@@ -7,10 +7,15 @@ import { registerApi } from './api.js';
 import { sendApiError } from './errors.js';
 import { sqliteAdapter } from '@db-explorer/adapter-sqlite';
 import { ConnectionManager } from './connections.js';
+import { ProfileStore } from './profiles.js';
 import { parseTarget } from './target.js';
 
 export async function createApplication(
-  options: { target?: string; adapters?: DatabaseAdapter[] } = {},
+  options: {
+    target?: string;
+    adapters?: DatabaseAdapter[];
+    profiles?: ProfileStore;
+  } = {},
 ) {
   const { target } = options;
   const connections = new ConnectionManager(
@@ -43,7 +48,8 @@ export async function createApplication(
     },
   });
   app.addHook('onClose', () => connections.closeAll());
-  registerApi(app, connections);
+  const profiles = options.profiles ?? new ProfileStore();
+  registerApi(app, connections, profiles);
   try {
     const initial = target === undefined ? undefined : parseTarget(target);
     if (initial)
@@ -64,15 +70,18 @@ export async function createApplication(
     app.get('/connections/*', async (_request, reply) =>
       reply.sendFile('index.html', webRoot),
     );
-    return { app, connections };
+    return { app, connections, profiles };
   } catch (error) {
     await app.close();
     throw error;
   }
 }
 
-export async function startApplication(target?: string) {
-  const { app, connections } = await createApplication({ target });
+export async function startApplication(
+  target?: string,
+  options: { profiles?: ProfileStore } = {},
+) {
+  const { app, connections } = await createApplication({ ...options, target });
   try {
     const url = await app.listen({ host: '127.0.0.1', port: 0 });
     return { app, connections, url };
